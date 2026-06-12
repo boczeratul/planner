@@ -4,13 +4,12 @@ import { useTrip } from "@/store/trip";
 import type { TripPlan } from "@/lib/types";
 
 /**
- * Agoda has no public deep-link by hotel name, so we open their text search
- * pre-filled with hotel + area + destination — it lands on the hotel page (or
- * a near-exact search result) in a new tab.
+ * Google Maps search deep link (documented Maps URLs API) — lands on the
+ * hotel's place page, from which the user can see photos, reviews and book.
  */
-function agodaSearchUrl(name: string, area: string, destination: string): string {
+function googleMapsUrl(name: string, area: string, destination: string): string {
   const q = encodeURIComponent(`${name} ${area} ${destination}`);
-  return `https://www.agoda.com/search?q=${q}`;
+  return `https://www.google.com/maps/search/?api=1&query=${q}`;
 }
 
 interface HotelStay {
@@ -48,13 +47,13 @@ export function HotelList() {
   return (
     <aside className="hidden w-72 shrink-0 overflow-y-auto border-l border-zinc-200 bg-zinc-50 p-4 lg:block">
       <h3 className="mb-1 font-bold text-zinc-900">Hotels</h3>
-      <p className="mb-4 text-xs text-zinc-400">Click a stay to book on Agoda ↗</p>
+      <p className="mb-4 text-xs text-zinc-400">Click a stay to view it on Google Maps ↗</p>
 
       <div className="space-y-3">
         {stays.map((stay) => (
           <a
             key={`${stay.name}-${stay.nights[0]}`}
-            href={agodaSearchUrl(stay.name, stay.area, plan.destination)}
+            href={googleMapsUrl(stay.name, stay.area, plan.destination)}
             target="_blank"
             rel="noopener noreferrer"
             className="block rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-indigo-400 hover:shadow"

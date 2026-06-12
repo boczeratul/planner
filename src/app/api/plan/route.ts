@@ -85,16 +85,13 @@ Design the full itinerary and reply conversationally.`,
   );
 
   try {
+    // Haiku 4.5: no thinking/effort params (both 400 on this model).
     const stream = anthropic.messages.stream({
       model: PLANNER_MODEL,
       max_tokens: 32000,
-      thinking: { type: "adaptive" },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: sections.join("\n\n") }],
       output_config: {
-        // medium effort: itinerary generation is fairly mechanical, and less
-        // thinking means the first block reaches the screen much sooner
-        effort: "medium",
         format: zodOutputFormat(currentPlan ? PlanRefineResponseSchema : PlanResponseSchema),
       },
     });
@@ -102,21 +99,48 @@ Design the full itinerary and reply conversationally.`,
     // Pipe the structured-output text deltas straight to the browser as they
     // arrive. The full body is the schema-constrained JSON document; the
     // client renders it progressively and zod-validates the final result.
+    // The browser can drop the connection mid-stream (reload, aborted fetch),
+    // which closes the controller — every controller call must tolerate that,
+    // or the route crashes with "Controller is already closed".
     const encoder = new TextEncoder();
+    let cancelled = false;
     const body = new ReadableStream({
       async start(controller) {
         try {
           for await (const event of stream) {
+            if (cancelled) break;
             if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-              controller.enqueue(encoder.encode(event.delta.text));
+              try {
+                controller.enqueue(encoder.encode(event.delta.text));
+              } catch {
+                cancelled = true; // client went away between cancel() and here
+                break;
+              }
             }
           }
-          await stream.finalMessage();
-          controller.close();
+          if (!cancelled) {
+            await stream.finalMessage();
+            try {
+              controller.close();
+            } catch {
+              // already closed by a late cancellation — nothing to do
+            }
+          }
         } catch (err) {
-          console.error("plan stream failed:", err);
-          controller.error(err);
+          if (!cancelled) {
+            console.error("plan stream failed:", err);
+            try {
+              controller.error(err);
+            } catch {
+              // controller already closed — the client is gone anyway
+            }
+          }
         }
+      },
+      cancel() {
+        // Reader disconnected: stop paying for tokens nobody will receive.
+        cancelled = true;
+        stream.abort();
       },
     });
 

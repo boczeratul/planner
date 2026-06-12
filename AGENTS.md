@@ -41,7 +41,7 @@ Requires `ANTHROPIC_API_KEY` in `.env.local` (see `.env.example`). The UI works 
 | `src/components/Onboarding.tsx` | Quiz flow. |
 | `src/components/ChatPanel.tsx` | Persistent left sidebar: chat transcript + input. Sends `{request, preferences, currentPlan, history}` to `/api/plan`; renders the `reply` as an assistant bubble. |
 | `src/components/ScheduleBoard.tsx` | dnd-kit board (center pane). `DayColumn.handleDragEnd` is the reorder → `/api/logistics` → apply loop. |
-| `src/components/HotelList.tsx` | Right column (hidden below `lg`): collapses per-day `lodging` into consecutive-night stays; each card opens an Agoda text-search (`agodaSearchUrl()` — hotel name + area + destination) in a new tab. No Agoda API/affiliate ids involved; if the URL format changes, fix that one helper. |
+| `src/components/HotelList.tsx` | Right column (hidden below `lg`): collapses per-day `lodging` into consecutive-night stays; each card opens a Google Maps search (`googleMapsUrl()` — the documented Maps URLs API, `maps/search/?api=1&query=` with hotel name + area + destination) in a new tab. Link construction lives in that one helper. |
 | `src/app/page.tsx` | Router-less state machine: hydrating → onboarding → three-column layout (ChatPanel left, board center, HotelList right when a plan exists). |
 
 ## Conventions and invariants
@@ -57,7 +57,7 @@ Requires `ANTHROPIC_API_KEY` in `.env.local` (see `.env.example`). The UI works 
 
 ## Claude API usage rules
 
-- Models: `PLANNER_MODEL` = `claude-sonnet-4-6` (plan generation/refinement, `effort: "medium"` for latency) and `LOGISTICS_MODEL` = `claude-haiku-4-5` (drag recompute — fast; supports **neither** adaptive thinking nor `effort`, don't add them). Change models in `anthropic.ts` only. Never guess model ids — there is no "sonnet 4.7"; unknown ids 404.
+- Models: `PLANNER_MODEL` and `LOGISTICS_MODEL` are both `claude-haiku-4-5` (fastest/cheapest; chosen for latency). Haiku 4.5 supports **neither** adaptive thinking nor `effort` — adding either 400s. If itinerary quality needs a bump, set `PLANNER_MODEL` to `claude-sonnet-4-6` and restore `thinking: {type:"adaptive"}` + `output_config.effort` in the plan route. Change models in `anthropic.ts` only. Never guess model ids — there is no "sonnet 4.7"; unknown ids 404.
 - Always stream: `anthropic.messages.stream()` + `await stream.finalMessage()`, with `output_config: { format: zodOutputFormat(Schema) }` for structured output. The SDK **rejects** non-streaming requests with high `max_tokens` ("Streaming is required for operations that may take longer than 10 minutes") — do not switch back to `messages.create()`/`messages.parse()` for these routes.
 - The output format guarantees the text block is schema-valid JSON; extract it and validate with `Schema.parse(JSON.parse(text))` — never regex/hand-parse model text.
 - Always `thinking: { type: "adaptive" }`. Do **not** add `temperature`, `top_p`, `top_k`, or `budget_tokens` (deprecated/removed on current models, and they 400 on Opus 4.7+). No assistant-message prefills (400 on Sonnet 4.6 and Opus 4.6+).
