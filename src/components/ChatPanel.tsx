@@ -3,11 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
-import type { PlanResponse } from "@/lib/types";
+import { parsePartialPlanResponse } from "@/lib/streaming";
+import { PlanResponseSchema } from "@/lib/types";
 
 export function ChatPanel() {
   const [text, setText] = useState("");
+  const [liveReply, setLiveReply] = useState("");
   const answers = usePreferences((s) => s.answers);
+  const microPreferences = usePreferences((s) => s.microPreferences);
+  const addMicroPreferences = usePreferences((s) => s.addMicroPreferences);
   const resetOnboarding = usePreferences((s) => s.resetOnboarding);
   const {
     plan,
@@ -17,6 +21,8 @@ export function ChatPanel() {
     setPlanning,
     setPlan,
     setPlanError,
+    setStreaming,
+    setStreamingPlan,
     addMessage,
   } = useTrip();
 
@@ -39,19 +45,52 @@ export function ChatPanel() {
         body: JSON.stringify({
           request,
           preferences: answers,
+          learned: microPreferences.map((m) => m.text),
           currentPlan: plan,
-          history: messages,
+          history: messages.filter((m) => m.role !== "note"),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `Planning failed (${res.status})`);
-      const { reply, plan: newPlan } = data as PlanResponse;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `Planning failed (${res.status})`);
+      }
+      if (!res.body) throw new Error("No response stream");
+
+      // The body is the structured-output JSON document, streamed as it is
+      // generated. Re-parse the accumulated fragment on each chunk so the
+      // board fills in block by block.
+      setStreaming(true);
+      setStreamingPlan(null);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        const partial = parsePartialPlanResponse(acc);
+        if (partial) {
+          if (partial.reply) setLiveReply(partial.reply);
+          if (partial.plan) setStreamingPlan(partial.plan);
+        }
+      }
+      acc += decoder.decode();
+
+      const { reply, plan: newPlan, learnedPreferences } = PlanResponseSchema.parse(
+        JSON.parse(acc),
+      );
       setPlan(newPlan);
       addMessage({ role: "assistant", text: reply });
+      for (const t of addMicroPreferences(learnedPreferences ?? [], "chat")) {
+        addMessage({ role: "note", text: `📌 Noted: ${t}` });
+      }
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : "Planning failed");
     } finally {
       setPlanning(false);
+      setStreaming(false);
+      setStreamingPlan(null);
+      setLiveReply("");
     }
   }
 
@@ -85,22 +124,33 @@ export function ChatPanel() {
           </div>
         )}
 
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
-              m.role === "user"
-                ? "ml-auto bg-indigo-600 text-white"
-                : "mr-auto bg-white text-zinc-800 shadow-sm"
-            }`}
-          >
-            {m.text}
-          </div>
-        ))}
+        {messages.map((m, i) =>
+          m.role === "note" ? (
+            <p key={i} className="px-2 text-center text-xs text-zinc-400">
+              {m.text}
+            </p>
+          ) : (
+            <div
+              key={i}
+              className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                m.role === "user"
+                  ? "ml-auto bg-indigo-600 text-white"
+                  : "mr-auto bg-white text-zinc-800 shadow-sm"
+              }`}
+            >
+              {m.text}
+            </div>
+          ),
+        )}
 
         {planning && (
-          <div className="mr-auto max-w-[85%] animate-pulse rounded-2xl bg-white px-4 py-2.5 text-sm text-indigo-600 shadow-sm">
-            {plan ? "Reworking the plan…" : "Designing your itinerary — this can take a minute…"}
+          <div
+            className={`mr-auto max-w-[85%] rounded-2xl bg-white px-4 py-2.5 text-sm shadow-sm ${
+              liveReply ? "whitespace-pre-wrap text-zinc-800" : "animate-pulse text-indigo-600"
+            }`}
+          >
+            {liveReply ||
+              (plan ? "Reworking the plan…" : "Designing your itinerary — this can take a minute…")}
           </div>
         )}
         {planError && (

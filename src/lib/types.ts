@@ -12,6 +12,15 @@ export interface PreferenceQuestion {
 /** questionId -> chosen option id */
 export type PreferenceAnswers = Record<string, string>;
 
+/** A preference inferred from how the user adjusted a plan (chat or drag). */
+export interface MicroPreference {
+  id: string;
+  /** Short generalizable statement, e.g. "prefers dinners after 20:00" */
+  text: string;
+  source: "chat" | "drag";
+  learnedAt: number;
+}
+
 // ---------- Itinerary ----------
 
 export const ScheduleBlockSchema = z.object({
@@ -55,6 +64,15 @@ export const TripPlanSchema = z.object({
   days: z.array(DayPlanSchema),
 });
 
+const LearnedPreferencesSchema = z
+  .array(z.string())
+  .describe(
+    "Durable, generalizable travel preferences this adjustment reveals about the traveler, " +
+      "each a short statement like 'prefers dinners after 20:00' or 'avoids museums'. " +
+      "Empty if the request is one-off/situational (weather, a specific booking) or already " +
+      "covered by the stated profile. Be conservative: most adjustments reveal nothing durable.",
+  );
+
 // Envelope returned by /api/plan: a conversational reply plus the (new or revised) plan
 export const PlanResponseSchema = z.object({
   reply: z
@@ -63,11 +81,12 @@ export const PlanResponseSchema = z.object({
       "Short conversational reply to the traveler (1-3 sentences): what was planned, or what changed and why",
     ),
   plan: TripPlanSchema,
+  learnedPreferences: LearnedPreferencesSchema,
 });
 
-// Chat message shown in the left panel (client-side only, not persisted)
+// Chat message shown in the left panel ("note" = a 📌 learned-preference line)
 export interface ChatMessage {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "note";
   text: string;
 }
 
@@ -79,6 +98,7 @@ export const LogisticsUpdateSchema = z.object({
   legs: z.array(LogisticsLegSchema),
   lodging: LodgingSchema,
   notes: z.string().describe("Brief note on what changed or any warnings, e.g. tight transfers"),
+  learnedPreferences: LearnedPreferencesSchema,
 });
 
 export type ScheduleBlock = z.infer<typeof ScheduleBlockSchema>;
@@ -87,4 +107,21 @@ export type Lodging = z.infer<typeof LodgingSchema>;
 export type DayPlan = z.infer<typeof DayPlanSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
 export type PlanResponse = z.infer<typeof PlanResponseSchema>;
+
+// Lenient shapes used while /api/plan is still streaming: only fully-formed
+// blocks/legs are included; later fields of a day may not have arrived yet.
+export interface PartialDayPlan {
+  day: number;
+  theme?: string;
+  blocks: ScheduleBlock[];
+  legs: LogisticsLeg[];
+  lodging?: Lodging;
+}
+
+export interface PartialTripPlan {
+  destination?: string;
+  durationDays?: number;
+  summary?: string;
+  days: PartialDayPlan[];
+}
 export type LogisticsUpdate = z.infer<typeof LogisticsUpdateSchema>;

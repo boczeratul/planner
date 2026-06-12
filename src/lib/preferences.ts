@@ -101,12 +101,22 @@ export const PREFERENCE_QUESTIONS: PreferenceQuestion[] = [
   },
 ];
 
-/** Render the stored answers as a plain-language profile for the planner prompt. */
-export function describePreferences(answers: PreferenceAnswers): string {
+/** Render the stored answers + learned micro-preferences as a profile for the planner prompt. */
+export function describePreferences(answers: PreferenceAnswers, learned: string[] = []): string {
   const lines = PREFERENCE_QUESTIONS.filter((q) => answers[q.id]).map((q) => {
     const picked = answers[q.id] === q.optionA.id ? q.optionA : q.optionB;
     return `- ${q.prompt} -> ${picked.label} (${picked.description})`;
   });
-  if (lines.length === 0) return "No stated preferences; assume a balanced traveler.";
-  return lines.join("\n");
+  const sections: string[] = [];
+  sections.push(
+    lines.length > 0 ? lines.join("\n") : "No stated preferences; assume a balanced traveler.",
+  );
+  if (learned.length > 0) {
+    sections.push(
+      `Learned from how this traveler adjusted past plans (treat as preferences):\n${learned
+        .map((t) => `- ${t}`)
+        .join("\n")}`,
+    );
+  }
+  return sections.join("\n\n");
 }

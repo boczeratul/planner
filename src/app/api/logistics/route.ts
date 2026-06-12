@@ -20,15 +20,26 @@ Rules:
 - Transit summaries must be concrete (mode, line/route names, realistic durations).
 - Respect plausible opening hours and meal times where possible; if the new order makes a
   timing awkward (e.g. dinner at 14:00), keep the order but flag it in notes.
-- Match the traveler's transport and budget preferences.`;
+- Match the traveler's transport and budget preferences.
+
+Learning preferences:
+- Compare the previous order with the new one. If the move clearly signals a durable taste
+  (e.g. moved dinner to the end of the day -> prefers late dinners; moved the museum before
+  the park -> prefers indoor sights in the morning), record it in learnedPreferences.
+- A single drag is weak evidence: only record a preference when the intent is unambiguous,
+  and never repeat anything already in the traveler's profile. An empty list is the normal
+  case.`;
 
 export async function POST(req: Request) {
-  const { destination, day, blocks, preferences } = (await req.json()) as {
-    destination: string;
-    day: number;
-    blocks: ScheduleBlock[];
-    preferences: PreferenceAnswers;
-  };
+  const { destination, day, blocks, previousBlockIds, preferences, learned } =
+    (await req.json()) as {
+      destination: string;
+      day: number;
+      blocks: ScheduleBlock[];
+      previousBlockIds?: string[];
+      preferences: PreferenceAnswers;
+      learned?: string[];
+    };
 
   if (!destination || !Array.isArray(blocks) || blocks.length === 0) {
     return NextResponse.json({ error: "Missing destination or blocks" }, { status: 400 });
@@ -49,8 +60,12 @@ export async function POST(req: Request) {
 Day ${day} blocks, in the traveler's new order:
 ${JSON.stringify(blocks, null, 2)}
 
+Previous block order (before the traveler's drag): ${
+            previousBlockIds ? previousBlockIds.join(" -> ") : "unknown"
+          }
+
 Traveler preference profile:
-${describePreferences(preferences ?? {})}
+${describePreferences(preferences ?? {}, learned ?? [])}
 
 Recompute start times, transit legs between consecutive blocks, and tonight's lodging.`,
         },

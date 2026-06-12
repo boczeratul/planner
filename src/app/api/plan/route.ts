@@ -30,12 +30,21 @@ When refining an existing itinerary:
   else — including block ids of untouched blocks — exactly as it was.
 - If a request is impossible or unwise (e.g. closed that day, geographically absurd), do your
   best and explain the trade-off in the reply.
-- The reply must be short and conversational (1-3 sentences): what changed and why.`;
+- The reply must be short and conversational (1-3 sentences): what changed and why.
+
+Learning preferences:
+- If a refinement request reveals a durable, generalizable taste (e.g. "no more museums" ->
+  avoids museums; "dinner is too early" -> prefers later dinners), record it in
+  learnedPreferences.
+- Do NOT record one-off or situational requests (weather, a specific closure, "my friend joins
+  on day 2"), and do NOT repeat anything already in the traveler's profile. Most requests
+  reveal nothing durable — an empty list is the normal case.`;
 
 export async function POST(req: Request) {
-  const { request, preferences, currentPlan, history } = (await req.json()) as {
+  const { request, preferences, learned, currentPlan, history } = (await req.json()) as {
     request: string;
     preferences: PreferenceAnswers;
+    learned?: string[];
     currentPlan?: TripPlan | null;
     history?: ChatMessage[];
   };
@@ -46,7 +55,7 @@ export async function POST(req: Request) {
 
   const sections = [
     `Traveler preference profile (from an A/B onboarding quiz):
-${describePreferences(preferences ?? {})}`,
+${describePreferences(preferences ?? {}, learned ?? [])}`,
   ];
 
   if (currentPlan) {
@@ -72,9 +81,6 @@ Design the full itinerary and reply conversationally.`,
   );
 
   try {
-    // Streaming is required for high max_tokens (the SDK rejects long
-    // non-streaming requests). The output format still guarantees the
-    // text block is schema-valid JSON; we re-validate with zod below.
     const stream = anthropic.messages.stream({
       model: PLANNER_MODEL,
       max_tokens: 32000,
@@ -84,13 +90,34 @@ Design the full itinerary and reply conversationally.`,
       output_config: { format: zodOutputFormat(PlanResponseSchema) },
     });
 
-    const message = await stream.finalMessage();
-    const text = message.content.find((b) => b.type === "text")?.text;
-    if (!text) {
-      return NextResponse.json({ error: "Planner returned no itinerary" }, { status: 502 });
-    }
-    const planResponse = PlanResponseSchema.parse(JSON.parse(text));
-    return NextResponse.json(planResponse);
+    // Pipe the structured-output text deltas straight to the browser as they
+    // arrive. The full body is the schema-constrained JSON document; the
+    // client renders it progressively and zod-validates the final result.
+    const encoder = new TextEncoder();
+    const body = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const event of stream) {
+            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+              controller.enqueue(encoder.encode(event.delta.text));
+            }
+          }
+          await stream.finalMessage();
+          controller.close();
+        } catch (err) {
+          console.error("plan stream failed:", err);
+          controller.error(err);
+        }
+      },
+    });
+
+    return new Response(body, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (err) {
     console.error("plan route failed:", err);
     const message = err instanceof Error ? err.message : "Planning failed";

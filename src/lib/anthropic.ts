@@ -4,4 +4,6 @@ import Anthropic from "@anthropic-ai/sdk";
 // never import this module from a client component.
 export const anthropic = new Anthropic();
 
-export const PLANNER_MODEL = "claude-opus-4-8";
+// Sonnet keeps API cost low ($3/$15 per Mtok vs $5/$25 for Opus).
+// NOTE: there is no "claude-sonnet-4-7" — 4.6 is the latest Sonnet; a guessed id 404s.
+export const PLANNER_MODEL = "claude-sonnet-4-6";

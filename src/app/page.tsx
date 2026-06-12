@@ -1,18 +1,22 @@
 "use client";
 
 import { ChatPanel } from "@/components/ChatPanel";
+import { HotelList } from "@/components/HotelList";
 import { Onboarding } from "@/components/Onboarding";
 import { ScheduleBoard } from "@/components/ScheduleBoard";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
 
 export default function Home() {
-  const hasHydrated = usePreferences((s) => s.hasHydrated);
+  const prefsHydrated = usePreferences((s) => s.hasHydrated);
+  const tripHydrated = useTrip((s) => s.hasHydrated);
   const onboardingComplete = usePreferences((s) => s.onboardingComplete);
   const plan = useTrip((s) => s.plan);
+  const streaming = useTrip((s) => s.streaming);
 
-  // Avoid a hydration flash while the persisted preferences load from localStorage.
-  if (!hasHydrated) return null;
+  // Avoid a hydration flash while persisted preferences and the saved plan
+  // load from localStorage.
+  if (!prefsHydrated || !tripHydrated) return null;
 
   if (!onboardingComplete) {
     return (
@@ -32,7 +36,7 @@ export default function Home() {
     <main className="flex h-screen overflow-hidden bg-white">
       <ChatPanel />
       <section className="flex-1 overflow-y-auto">
-        {plan ? (
+        {plan || streaming ? (
           <ScheduleBoard />
         ) : (
           <div className="flex h-full items-center justify-center px-8 text-center">
@@ -46,6 +50,7 @@ export default function Home() {
           </div>
         )}
       </section>
+      {plan && !streaming && <HotelList />}
     </main>
   );
 }
