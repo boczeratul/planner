@@ -1,8 +1,8 @@
 "use client";
 
+import { ChatPanel } from "@/components/ChatPanel";
 import { Onboarding } from "@/components/Onboarding";
 import { ScheduleBoard } from "@/components/ScheduleBoard";
-import { TripInput } from "@/components/TripInput";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
 
@@ -29,8 +29,23 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-white">
-      {plan ? <ScheduleBoard /> : <TripInput />}
+    <main className="flex h-screen overflow-hidden bg-white">
+      <ChatPanel />
+      <section className="flex-1 overflow-y-auto">
+        {plan ? (
+          <ScheduleBoard />
+        ) : (
+          <div className="flex h-full items-center justify-center px-8 text-center">
+            <div>
+              <p className="text-4xl">🗺️</p>
+              <p className="mt-4 text-lg font-medium text-zinc-700">Your itinerary will appear here</p>
+              <p className="mt-1 text-sm text-zinc-400">
+                Tell the planner where you want to go in the panel on the left.
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
     </main>
   );
 }

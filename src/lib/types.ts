@@ -55,6 +55,22 @@ export const TripPlanSchema = z.object({
   days: z.array(DayPlanSchema),
 });
 
+// Envelope returned by /api/plan: a conversational reply plus the (new or revised) plan
+export const PlanResponseSchema = z.object({
+  reply: z
+    .string()
+    .describe(
+      "Short conversational reply to the traveler (1-3 sentences): what was planned, or what changed and why",
+    ),
+  plan: TripPlanSchema,
+});
+
+// Chat message shown in the left panel (client-side only, not persisted)
+export interface ChatMessage {
+  role: "user" | "assistant";
+  text: string;
+}
+
 // Returned when the user reorders blocks and logistics must be recomputed
 export const LogisticsUpdateSchema = z.object({
   blocks: z
@@ -70,4 +86,5 @@ export type LogisticsLeg = z.infer<typeof LogisticsLegSchema>;
 export type Lodging = z.infer<typeof LodgingSchema>;
 export type DayPlan = z.infer<typeof DayPlanSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
+export type PlanResponse = z.infer<typeof PlanResponseSchema>;
 export type LogisticsUpdate = z.infer<typeof LogisticsUpdateSchema>;

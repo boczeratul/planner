@@ -173,18 +173,18 @@ function DayColumn({ day, destination }: { day: DayPlan; destination: string }) 
 
 export function ScheduleBoard() {
   const plan = useTrip((s) => s.plan);
-  const setPlan = useTrip((s) => s.setPlan);
+  const reset = useTrip((s) => s.reset);
   if (!plan) return null;
 
   return (
-    <div className="px-6 pb-16">
-      <div className="mx-auto mb-6 max-w-3xl">
+    <div className="px-6 pb-16 pt-8">
+      <div className="mb-6">
         <div className="flex items-baseline justify-between">
           <h2 className="text-2xl font-bold text-zinc-900">
             {plan.destination} · {plan.durationDays} days
           </h2>
           <button
-            onClick={() => setPlan(null)}
+            onClick={reset}
             className="text-sm font-medium text-zinc-400 hover:text-zinc-700"
           >
             Start over
@@ -192,7 +192,8 @@ export function ScheduleBoard() {
         </div>
         <p className="mt-2 text-zinc-600">{plan.summary}</p>
         <p className="mt-1 text-xs text-zinc-400">
-          Drag blocks to rearrange a day — transit and timings recompute automatically.
+          Drag blocks to rearrange a day — transit and timings recompute automatically. Or ask
+          for changes in the chat on the left.
         </p>
       </div>
 

@@ -35,7 +35,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    const response = await anthropic.messages.parse({
+    // Streaming sidesteps the SDK's long-request guard; the output format
+    // still guarantees schema-valid JSON, re-validated with zod below.
+    const stream = anthropic.messages.stream({
       model: PLANNER_MODEL,
       max_tokens: 16000,
       thinking: { type: "adaptive" },
@@ -56,10 +58,12 @@ Recompute start times, transit legs between consecutive blocks, and tonight's lo
       output_config: { format: zodOutputFormat(LogisticsUpdateSchema) },
     });
 
-    const update = response.parsed_output;
-    if (!update) {
+    const message = await stream.finalMessage();
+    const text = message.content.find((b) => b.type === "text")?.text;
+    if (!text) {
       return NextResponse.json({ error: "Logistics engine returned nothing" }, { status: 502 });
     }
+    const update = LogisticsUpdateSchema.parse(JSON.parse(text));
     return NextResponse.json(update);
   } catch (err) {
     console.error("logistics route failed:", err);

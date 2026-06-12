@@ -1,17 +1,22 @@
 "use client";
 
 import { create } from "zustand";
-import type { LogisticsUpdate, TripPlan } from "@/lib/types";
+import type { ChatMessage, LogisticsUpdate, TripPlan } from "@/lib/types";
 
 interface TripState {
   plan: TripPlan | null;
   planning: boolean;
   planError: string | null;
+  /** chat transcript shown in the left panel */
+  messages: ChatMessage[];
   /** day numbers whose logistics are being recomputed */
   recomputingDays: number[];
   setPlanning: (v: boolean) => void;
   setPlan: (plan: TripPlan | null) => void;
   setPlanError: (e: string | null) => void;
+  addMessage: (m: ChatMessage) => void;
+  /** Clear the plan and the conversation (Start over). */
+  reset: () => void;
   /** Reorder blocks within a day (optimistic, before logistics recompute). */
   reorderDay: (day: number, blockIds: string[]) => void;
   startRecompute: (day: number) => void;
@@ -23,10 +28,14 @@ export const useTrip = create<TripState>((set) => ({
   plan: null,
   planning: false,
   planError: null,
+  messages: [],
   recomputingDays: [],
   setPlanning: (v) => set({ planning: v }),
   setPlan: (plan) => set({ plan, planError: null }),
   setPlanError: (e) => set({ planError: e }),
+  addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
+  reset: () =>
+    set({ plan: null, messages: [], planError: null, planning: false, recomputingDays: [] }),
   reorderDay: (day, blockIds) =>
     set((s) => {
       if (!s.plan) return s;
