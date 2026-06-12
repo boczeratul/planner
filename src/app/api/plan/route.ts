@@ -3,6 +3,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { anthropic, PLANNER_MODEL } from "@/lib/anthropic";
 import { describePreferences } from "@/lib/preferences";
 import {
+  PlanRefineResponseSchema,
   PlanResponseSchema,
   type ChatMessage,
   type PreferenceAnswers,
@@ -26,8 +27,11 @@ Rules:
   the traveler's budget preference.
 
 When refining an existing itinerary:
-- Change ONLY what the traveler asked for (and whatever logistics that forces); keep everything
-  else — including block ids of untouched blocks — exactly as it was.
+- Return ONLY the affected days in changedDays, as complete day objects (all blocks, legs,
+  lodging — with times and transit recomputed for that day). Do NOT re-emit untouched days.
+- Within a changed day, keep the ids and content of blocks the traveler didn't ask to change.
+- If the request changes the trip length or destination, include every day that is new or
+  affected, and update durationDays/destination/summary accordingly.
 - If a request is impossible or unwise (e.g. closed that day, geographically absurd), do your
   best and explain the trade-off in the reply.
 - The reply must be short and conversational (1-3 sentences): what changed and why.
@@ -74,7 +78,7 @@ ${transcript}`);
     currentPlan
       ? `The traveler's new request: ${request}
 
-Revise the itinerary accordingly and reply conversationally.`
+Revise the itinerary accordingly and reply conversationally. Return only the changed days.`
       : `Trip request: ${request}
 
 Design the full itinerary and reply conversationally.`,
@@ -87,7 +91,12 @@ Design the full itinerary and reply conversationally.`,
       thinking: { type: "adaptive" },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: sections.join("\n\n") }],
-      output_config: { format: zodOutputFormat(PlanResponseSchema) },
+      output_config: {
+        // medium effort: itinerary generation is fairly mechanical, and less
+        // thinking means the first block reaches the screen much sooner
+        effort: "medium",
+        format: zodOutputFormat(currentPlan ? PlanRefineResponseSchema : PlanResponseSchema),
+      },
     });
 
     // Pipe the structured-output text deltas straight to the browser as they

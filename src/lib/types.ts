@@ -73,7 +73,7 @@ const LearnedPreferencesSchema = z
       "covered by the stated profile. Be conservative: most adjustments reveal nothing durable.",
   );
 
-// Envelope returned by /api/plan: a conversational reply plus the (new or revised) plan
+// Envelope returned by /api/plan for INITIAL generation: reply + the full plan
 export const PlanResponseSchema = z.object({
   reply: z
     .string()
@@ -81,6 +81,25 @@ export const PlanResponseSchema = z.object({
       "Short conversational reply to the traveler (1-3 sentences): what was planned, or what changed and why",
     ),
   plan: TripPlanSchema,
+  learnedPreferences: LearnedPreferencesSchema,
+});
+
+// Envelope returned by /api/plan for REFINEMENTS: only the days that changed,
+// as complete day objects — emitting the untouched days again would waste
+// output tokens, which dominate response time.
+export const PlanRefineResponseSchema = z.object({
+  reply: z
+    .string()
+    .describe("Short conversational reply (1-3 sentences): what changed and why"),
+  destination: z.string().describe("Unchanged unless the traveler moved the trip"),
+  durationDays: z.number().int(),
+  summary: z.string().describe("Trip overview; update only if the trip materially changed"),
+  changedDays: z
+    .array(DayPlanSchema)
+    .describe(
+      "ONLY the days affected by this request, as complete day objects (blocks, legs, lodging). " +
+        "Days not listed are kept exactly as they were.",
+    ),
   learnedPreferences: LearnedPreferencesSchema,
 });
 
@@ -107,6 +126,7 @@ export type Lodging = z.infer<typeof LodgingSchema>;
 export type DayPlan = z.infer<typeof DayPlanSchema>;
 export type TripPlan = z.infer<typeof TripPlanSchema>;
 export type PlanResponse = z.infer<typeof PlanResponseSchema>;
+export type PlanRefineResponse = z.infer<typeof PlanRefineResponseSchema>;
 
 // Lenient shapes used while /api/plan is still streaming: only fully-formed
 // blocks/legs are included; later fields of a day may not have arrived yet.

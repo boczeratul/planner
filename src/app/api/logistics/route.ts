@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { anthropic, PLANNER_MODEL } from "@/lib/anthropic";
+import { anthropic, LOGISTICS_MODEL } from "@/lib/anthropic";
 import { describePreferences } from "@/lib/preferences";
 import {
   LogisticsUpdateSchema,
@@ -48,10 +48,10 @@ export async function POST(req: Request) {
   try {
     // Streaming sidesteps the SDK's long-request guard; the output format
     // still guarantees schema-valid JSON, re-validated with zod below.
+    // Haiku 4.5: no thinking/effort params — fast mechanical recompute.
     const stream = anthropic.messages.stream({
-      model: PLANNER_MODEL,
+      model: LOGISTICS_MODEL,
       max_tokens: 16000,
-      thinking: { type: "adaptive" },
       system: SYSTEM_PROMPT,
       messages: [
         {

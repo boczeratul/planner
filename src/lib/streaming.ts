@@ -6,7 +6,9 @@ import {
   type LogisticsLeg,
   type PartialDayPlan,
   type PartialTripPlan,
+  type PlanRefineResponse,
   type ScheduleBlock,
+  type TripPlan,
 } from "./types";
 
 /**
@@ -46,16 +48,40 @@ export function repairAndParse(text: string): unknown | null {
   }
 }
 
+/** Keep only the blocks/legs/lodging of each day that fully validate already. */
+function sanitizeDays(raw: unknown): PartialDayPlan[] {
+  if (!Array.isArray(raw)) return [];
+  const days: PartialDayPlan[] = [];
+  for (const d of raw) {
+    if (!d || typeof d !== "object") continue;
+    const dd = d as Record<string, unknown>;
+    if (typeof dd.day !== "number") continue;
+    const blocks = (Array.isArray(dd.blocks) ? dd.blocks : []).filter(
+      (b): b is ScheduleBlock => ScheduleBlockSchema.safeParse(b).success,
+    );
+    const legs = (Array.isArray(dd.legs) ? dd.legs : []).filter(
+      (l): l is LogisticsLeg => LogisticsLegSchema.safeParse(l).success,
+    );
+    const lodging = LodgingSchema.safeParse(dd.lodging).success
+      ? (dd.lodging as Lodging)
+      : undefined;
+    days.push({
+      day: dd.day,
+      theme: typeof dd.theme === "string" ? dd.theme : undefined,
+      blocks,
+      legs,
+      lodging,
+    });
+  }
+  return days;
+}
+
 export interface PartialPlanResponse {
   reply?: string;
   plan: PartialTripPlan | null;
 }
 
-/**
- * Extract whatever is already complete from a streaming /api/plan response:
- * the (possibly truncated) reply text, and only the blocks/legs/lodging that
- * fully validate against their schemas.
- */
+/** Progressive view of a streaming INITIAL plan response. */
 export function parsePartialPlanResponse(text: string): PartialPlanResponse | null {
   const raw = repairAndParse(text);
   if (!raw || typeof raw !== "object") return null;
@@ -69,37 +95,71 @@ export function parsePartialPlanResponse(text: string): PartialPlanResponse | nu
   const planRaw = obj.plan;
   if (planRaw && typeof planRaw === "object") {
     const p = planRaw as Record<string, unknown>;
-    const days: PartialDayPlan[] = [];
-    if (Array.isArray(p.days)) {
-      for (const d of p.days) {
-        if (!d || typeof d !== "object") continue;
-        const dd = d as Record<string, unknown>;
-        if (typeof dd.day !== "number") continue;
-        const blocks = (Array.isArray(dd.blocks) ? dd.blocks : []).filter(
-          (b): b is ScheduleBlock => ScheduleBlockSchema.safeParse(b).success,
-        );
-        const legs = (Array.isArray(dd.legs) ? dd.legs : []).filter(
-          (l): l is LogisticsLeg => LogisticsLegSchema.safeParse(l).success,
-        );
-        const lodging = LodgingSchema.safeParse(dd.lodging).success
-          ? (dd.lodging as Lodging)
-          : undefined;
-        days.push({
-          day: dd.day,
-          theme: typeof dd.theme === "string" ? dd.theme : undefined,
-          blocks,
-          legs,
-          lodging,
-        });
-      }
-    }
     result.plan = {
       destination: typeof p.destination === "string" ? p.destination : undefined,
       durationDays: typeof p.durationDays === "number" ? p.durationDays : undefined,
       summary: typeof p.summary === "string" ? p.summary : undefined,
-      days,
+      days: sanitizeDays(p.days),
     };
   }
 
   return result;
+}
+
+export interface PartialRefineResponse {
+  reply?: string;
+  changedDays: PartialDayPlan[];
+}
+
+/** Progressive view of a streaming REFINEMENT response. */
+export function parsePartialRefineResponse(text: string): PartialRefineResponse | null {
+  const raw = repairAndParse(text);
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  return {
+    reply: typeof obj.reply === "string" ? obj.reply : undefined,
+    changedDays: sanitizeDays(obj.changedDays),
+  };
+}
+
+/** The current plan, viewed as the lenient streaming shape. */
+export function planToPartial(plan: TripPlan): PartialTripPlan {
+  return {
+    destination: plan.destination,
+    durationDays: plan.durationDays,
+    summary: plan.summary,
+    days: plan.days,
+  };
+}
+
+/**
+ * Streaming view during a refinement: the existing plan with the days being
+ * rewritten substituted by their (possibly half-streamed) replacements.
+ */
+export function overlayPartialDays(
+  plan: TripPlan,
+  changedDays: PartialDayPlan[],
+): PartialTripPlan {
+  const byDay = new Map(changedDays.map((d) => [d.day, d]));
+  const days: PartialDayPlan[] = plan.days.map((d) => byDay.get(d.day) ?? d);
+  for (const d of changedDays) {
+    if (!plan.days.some((pd) => pd.day === d.day)) days.push(d);
+  }
+  days.sort((a, b) => a.day - b.day);
+  return { ...planToPartial(plan), days };
+}
+
+/** Merge a validated refinement into the existing plan. */
+export function mergeRefinedPlan(plan: TripPlan, refine: PlanRefineResponse): TripPlan {
+  const byDay = new Map(refine.changedDays.map((d) => [d.day, d]));
+  const days = plan.days.map((d) => byDay.get(d.day) ?? d);
+  for (const d of refine.changedDays) {
+    if (!plan.days.some((pd) => pd.day === d.day)) days.push(d);
+  }
+  return {
+    destination: refine.destination,
+    durationDays: refine.durationDays,
+    summary: refine.summary,
+    days: days.filter((d) => d.day <= refine.durationDays).sort((a, b) => a.day - b.day),
+  };
 }

@@ -3,8 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
-import { parsePartialPlanResponse } from "@/lib/streaming";
-import { PlanResponseSchema } from "@/lib/types";
+import {
+  mergeRefinedPlan,
+  overlayPartialDays,
+  parsePartialPlanResponse,
+  parsePartialRefineResponse,
+  planToPartial,
+} from "@/lib/streaming";
+import { PlanRefineResponseSchema, PlanResponseSchema } from "@/lib/types";
 
 export function ChatPanel() {
   const [text, setText] = useState("");
@@ -58,9 +64,11 @@ export function ChatPanel() {
 
       // The body is the structured-output JSON document, streamed as it is
       // generated. Re-parse the accumulated fragment on each chunk so the
-      // board fills in block by block.
+      // board fills in block by block. Refinements stream only the changed
+      // days, overlaid live onto the existing plan.
+      const refining = plan !== null;
       setStreaming(true);
-      setStreamingPlan(null);
+      setStreamingPlan(refining ? planToPartial(plan) : null);
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = "";
@@ -68,18 +76,37 @@ export function ChatPanel() {
         const { done, value } = await reader.read();
         if (done) break;
         acc += decoder.decode(value, { stream: true });
-        const partial = parsePartialPlanResponse(acc);
-        if (partial) {
-          if (partial.reply) setLiveReply(partial.reply);
-          if (partial.plan) setStreamingPlan(partial.plan);
+        if (refining) {
+          const partial = parsePartialRefineResponse(acc);
+          if (partial) {
+            if (partial.reply) setLiveReply(partial.reply);
+            if (partial.changedDays.length > 0) {
+              setStreamingPlan(overlayPartialDays(plan, partial.changedDays));
+            }
+          }
+        } else {
+          const partial = parsePartialPlanResponse(acc);
+          if (partial) {
+            if (partial.reply) setLiveReply(partial.reply);
+            if (partial.plan) setStreamingPlan(partial.plan);
+          }
         }
       }
       acc += decoder.decode();
 
-      const { reply, plan: newPlan, learnedPreferences } = PlanResponseSchema.parse(
-        JSON.parse(acc),
-      );
-      setPlan(newPlan);
+      let reply: string;
+      let learnedPreferences: string[];
+      if (refining) {
+        const refine = PlanRefineResponseSchema.parse(JSON.parse(acc));
+        setPlan(mergeRefinedPlan(plan, refine));
+        reply = refine.reply;
+        learnedPreferences = refine.learnedPreferences;
+      } else {
+        const full = PlanResponseSchema.parse(JSON.parse(acc));
+        setPlan(full.plan);
+        reply = full.reply;
+        learnedPreferences = full.learnedPreferences;
+      }
       addMessage({ role: "assistant", text: reply });
       for (const t of addMicroPreferences(learnedPreferences ?? [], "chat")) {
         addMessage({ role: "note", text: `📌 Noted: ${t}` });
