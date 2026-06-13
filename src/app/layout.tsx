@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { ClerkProvider, UserButton } from "@clerk/nextjs";
+import { SyncProvider } from "@/components/SyncProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -23,11 +25,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
+    <ClerkProvider>
+      <html
+        lang="en"
+        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      >
+        <body className="min-h-full flex flex-col">
+          {/* Account menu / sign-out. UserButton renders nothing when signed
+              out; after sign-out, middleware redirects to /sign-in. */}
+          <div className="fixed right-3 top-2 z-50">
+            <UserButton />
+          </div>
+          <SyncProvider>{children}</SyncProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

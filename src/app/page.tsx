@@ -11,18 +11,20 @@ import { ScheduleBoard } from "@/components/ScheduleBoard";
 import { TripSwitcher } from "@/components/TripSwitcher";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
+import { useSyncStatus } from "@/store/syncStatus";
 
 export default function Home() {
   const prefsHydrated = usePreferences((s) => s.hasHydrated);
   const tripHydrated = useTrip((s) => s.hasHydrated);
+  const synced = useSyncStatus((s) => s.synced);
   const onboardingComplete = usePreferences((s) => s.onboardingComplete);
   const plan = useTrip((s) => s.plan);
   const streaming = useTrip((s) => s.streaming);
   const activeTripId = useTrip((s) => s.activeTripId);
 
-  // Avoid a hydration flash while persisted preferences and the saved plan
-  // load from localStorage.
-  if (!prefsHydrated || !tripHydrated) return null;
+  // Wait for the local cache AND the server reconcile so a fresh device
+  // doesn't flash onboarding before this user's trips arrive.
+  if (!prefsHydrated || !tripHydrated || !synced) return null;
 
   if (!onboardingComplete) {
     return (

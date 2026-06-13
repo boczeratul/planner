@@ -7,6 +7,7 @@ import { BlockInner, TransitLeg } from "@/components/ScheduleBoard";
 import type { QueryStop } from "@/components/DayMap";
 import { dateForDay } from "@/lib/dates";
 import { useTrip } from "@/store/trip";
+import { useSyncStatus } from "@/store/syncStatus";
 import type { DayPlan, TripPlan } from "@/lib/types";
 
 const DayMap = dynamic(() => import("@/components/DayMap"), { ssr: false });
@@ -51,11 +52,12 @@ function dayStops(plan: TripPlan, day: DayPlan): QueryStop[] {
 
 export default function ExecutePage() {
   const hasHydrated = useTrip((s) => s.hasHydrated);
+  const synced = useSyncStatus((s) => s.synced);
   const plan = useTrip((s) => s.plan);
   const [selectedDay, setSelectedDay] = useState(1);
   const [selectedStop, setSelectedStop] = useState<string | null>(null);
 
-  if (!hasHydrated) return null;
+  if (!hasHydrated || !synced) return null;
 
   if (!plan || plan.days.length === 0) {
     return (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { getAuthUserId } from "@/lib/requireUser";
 import { anthropic, LOGISTICS_MODEL } from "@/lib/anthropic";
 import { describePreferences } from "@/lib/preferences";
 import {
@@ -33,6 +34,9 @@ Learning preferences:
   case.`;
 
 export async function POST(req: Request) {
+  if (!(await getAuthUserId())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { destination, day, blocks, previousBlockIds, preferences, learned } =
     (await req.json()) as {
       destination: string;
