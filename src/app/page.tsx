@@ -40,7 +40,7 @@ export default function Home() {
 
   return (
     <main className="flex h-screen overflow-hidden bg-white">
-      <div className="flex w-[380px] shrink-0 flex-col border-r border-zinc-200">
+      <div className="flex h-full w-[380px] shrink-0 flex-col border-r border-zinc-200">
         <TripSwitcher />
         {/* Remount the chat per trip so its local draft/streaming state resets. */}
         <ChatPanel key={activeTripId} />

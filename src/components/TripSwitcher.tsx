@@ -26,7 +26,7 @@ export function TripSwitcher() {
   }
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-200 bg-zinc-100 px-2 py-2">
+    <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-zinc-200 bg-zinc-100 px-2 py-2">
       {trips.map((t) => {
         const active = t.id === activeTripId;
         const editing = t.id === editingId;
