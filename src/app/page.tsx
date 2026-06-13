@@ -8,6 +8,7 @@ import { HotelList } from "@/components/HotelList";
 const HotelReconciler = dynamic(() => import("@/components/HotelReconciler"), { ssr: false });
 import { Onboarding } from "@/components/Onboarding";
 import { ScheduleBoard } from "@/components/ScheduleBoard";
+import { TripSwitcher } from "@/components/TripSwitcher";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
 
@@ -17,6 +18,7 @@ export default function Home() {
   const onboardingComplete = usePreferences((s) => s.onboardingComplete);
   const plan = useTrip((s) => s.plan);
   const streaming = useTrip((s) => s.streaming);
+  const activeTripId = useTrip((s) => s.activeTripId);
 
   // Avoid a hydration flash while persisted preferences and the saved plan
   // load from localStorage.
@@ -38,7 +40,11 @@ export default function Home() {
 
   return (
     <main className="flex h-screen overflow-hidden bg-white">
-      <ChatPanel />
+      <div className="flex w-[380px] shrink-0 flex-col border-r border-zinc-200">
+        <TripSwitcher />
+        {/* Remount the chat per trip so its local draft/streaming state resets. */}
+        <ChatPanel key={activeTripId} />
+      </div>
       <section className="flex-1 overflow-y-auto">
         {plan || streaming ? (
           <ScheduleBoard />

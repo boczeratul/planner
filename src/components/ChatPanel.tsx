@@ -149,7 +149,7 @@ export function ChatPanel() {
   }
 
   return (
-    <aside className="flex h-full w-[380px] shrink-0 flex-col border-r border-zinc-200 bg-zinc-50">
+    <aside className="flex h-full w-full flex-1 flex-col bg-zinc-50">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
         <h1 className="font-bold text-zinc-900">Trip planner</h1>
         <button
