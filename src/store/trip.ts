@@ -14,6 +14,8 @@ interface TripState {
   streamingPlan: PartialTripPlan | null;
   /** chat transcript shown in the left panel */
   messages: ChatMessage[];
+  /** when set, ChatPanel copies it into the input and focuses it (swap-out flow) */
+  chatDraft: string | null;
   /** day numbers whose logistics are being recomputed */
   recomputingDays: number[];
   hasHydrated: boolean;
@@ -22,7 +24,15 @@ interface TripState {
   setPlanError: (e: string | null) => void;
   setStreaming: (v: boolean) => void;
   setStreamingPlan: (p: PartialTripPlan | null) => void;
+  /** Set/replace day 1's date (ISO YYYY-MM-DD); persists with the plan. */
+  setStartDate: (startDate: string) => void;
+  /**
+   * Rename lodging entries in place (hotel-merge): every lodging whose name
+   * is a key of `mapping` takes that entry's canonical name/area.
+   */
+  mergeLodgings: (mapping: Record<string, { name: string; area: string }>) => void;
   addMessage: (m: ChatMessage) => void;
+  setChatDraft: (d: string | null) => void;
   /** Clear the plan and the conversation (Start over). */
   reset: () => void;
   setHasHydrated: (v: boolean) => void;
@@ -42,6 +52,7 @@ export const useTrip = create<TripState>()(
       streaming: false,
       streamingPlan: null,
       messages: [],
+      chatDraft: null,
       recomputingDays: [],
       hasHydrated: false,
       setPlanning: (v) => set({ planning: v }),
@@ -49,7 +60,24 @@ export const useTrip = create<TripState>()(
       setPlanError: (e) => set({ planError: e }),
       setStreaming: (v) => set({ streaming: v }),
       setStreamingPlan: (p) => set({ streamingPlan: p }),
+      setStartDate: (startDate) =>
+        set((s) => (s.plan ? { plan: { ...s.plan, startDate } } : s)),
+      mergeLodgings: (mapping) =>
+        set((s) => {
+          if (!s.plan) return s;
+          return {
+            plan: {
+              ...s.plan,
+              days: s.plan.days.map((d) => {
+                const target = d.lodging && mapping[d.lodging.name];
+                if (!target) return d;
+                return { ...d, lodging: { ...d.lodging!, name: target.name, area: target.area } };
+              }),
+            },
+          };
+        }),
       addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
+      setChatDraft: (chatDraft) => set({ chatDraft }),
       reset: () =>
         set({
           plan: null,

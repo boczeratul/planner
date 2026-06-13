@@ -25,12 +25,28 @@ export interface MicroPreference {
 
 export const ScheduleBlockSchema = z.object({
   id: z.string().describe("Stable unique id, e.g. 'd1-b2'"),
-  type: z.enum(["breakfast", "lunch", "dinner", "attraction", "activity", "rest"]),
+  type: z.enum([
+    "arrival",
+    "breakfast",
+    "lunch",
+    "dinner",
+    "attraction",
+    "activity",
+    "rest",
+    "departure",
+  ]),
   title: z.string(),
   description: z.string().describe("1-2 sentences on why this fits the traveler"),
   location: z.string().describe("Neighborhood or address-level location"),
   startTime: z.string().describe("24h local time, e.g. '09:30'"),
   durationMinutes: z.number().int(),
+  movable: z
+    .boolean()
+    .describe(
+      "false when the block is anchored and must not be reordered by dragging: " +
+        "arrival/departure, blocks tied to the lodging (e.g. 'breakfast near the hotel'), " +
+        "or fixed-time bookings. true for freely reorderable blocks.",
+    ),
 });
 
 export const LogisticsLegSchema = z.object({
@@ -54,12 +70,20 @@ export const DayPlanSchema = z.object({
   theme: z.string().describe("Short theme for the day, e.g. 'Old town & street food'"),
   blocks: z.array(ScheduleBlockSchema),
   legs: z.array(LogisticsLegSchema).describe("Transit between consecutive blocks"),
-  lodging: LodgingSchema.describe("Where to stay this night"),
+  lodging: LodgingSchema.nullable().describe(
+    "Where to stay this night. null when there is no overnight stay (e.g. the final day, " +
+      "when the traveler departs) — never invent a 'checkout' placeholder entry.",
+  ),
 });
 
 export const TripPlanSchema = z.object({
   destination: z.string(),
   durationDays: z.number().int(),
+  startDate: z
+    .string()
+    .describe(
+      'ISO date (YYYY-MM-DD) of day 1, if the traveler has stated when the trip starts. "" if unknown.',
+    ),
   summary: z.string().describe("2-3 sentence overview of the trip"),
   days: z.array(DayPlanSchema),
 });
@@ -93,6 +117,11 @@ export const PlanRefineResponseSchema = z.object({
     .describe("Short conversational reply (1-3 sentences): what changed and why"),
   destination: z.string().describe("Unchanged unless the traveler moved the trip"),
   durationDays: z.number().int(),
+  startDate: z
+    .string()
+    .describe(
+      'ISO date (YYYY-MM-DD) of day 1. Copy from the current itinerary unless the traveler specified or changed it; "" if still unknown.',
+    ),
   summary: z.string().describe("Trip overview; update only if the trip materially changed"),
   changedDays: z
     .array(DayPlanSchema)
@@ -115,7 +144,9 @@ export const LogisticsUpdateSchema = z.object({
     .array(z.object({ id: z.string(), startTime: z.string() }))
     .describe("Recomputed start times for the reordered blocks, same order as given"),
   legs: z.array(LogisticsLegSchema),
-  lodging: LodgingSchema,
+  lodging: LodgingSchema.nullable().describe(
+    "Tonight's lodging; null when there is no overnight stay (final/departure day)",
+  ),
   notes: z.string().describe("Brief note on what changed or any warnings, e.g. tight transfers"),
   learnedPreferences: LearnedPreferencesSchema,
 });
@@ -135,13 +166,16 @@ export interface PartialDayPlan {
   theme?: string;
   blocks: ScheduleBlock[];
   legs: LogisticsLeg[];
-  lodging?: Lodging;
+  lodging?: Lodging | null;
 }
 
 export interface PartialTripPlan {
   destination?: string;
   durationDays?: number;
+  startDate?: string;
   summary?: string;
   days: PartialDayPlan[];
+  /** The day currently being streamed (shows the "planning…" placeholder). */
+  activeDay?: number;
 }
 export type LogisticsUpdate = z.infer<typeof LogisticsUpdateSchema>;

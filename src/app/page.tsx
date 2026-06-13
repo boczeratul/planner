@@ -1,7 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { ChatPanel } from "@/components/ChatPanel";
 import { HotelList } from "@/components/HotelList";
+
+// Client-only: verifies hotels on Google Maps after each plan change
+const HotelReconciler = dynamic(() => import("@/components/HotelReconciler"), { ssr: false });
 import { Onboarding } from "@/components/Onboarding";
 import { ScheduleBoard } from "@/components/ScheduleBoard";
 import { usePreferences } from "@/store/preferences";
@@ -51,6 +55,7 @@ export default function Home() {
         )}
       </section>
       {plan && !streaming && <HotelList />}
+      <HotelReconciler />
     </main>
   );
 }

@@ -1,42 +1,7 @@
 "use client";
 
 import { useTrip } from "@/store/trip";
-import type { TripPlan } from "@/lib/types";
-
-/**
- * Google Maps search deep link (documented Maps URLs API) — lands on the
- * hotel's place page, from which the user can see photos, reviews and book.
- */
-function googleMapsUrl(name: string, area: string, destination: string): string {
-  const q = encodeURIComponent(`${name} ${area} ${destination}`);
-  return `https://www.google.com/maps/search/?api=1&query=${q}`;
-}
-
-interface HotelStay {
-  name: string;
-  area: string;
-  reason: string;
-  nights: number[]; // day numbers
-}
-
-/** Collapse per-day lodging into stays (consecutive nights at the same hotel). */
-function collectStays(plan: TripPlan): HotelStay[] {
-  const stays: HotelStay[] = [];
-  for (const day of plan.days) {
-    const last = stays[stays.length - 1];
-    if (last && last.name === day.lodging.name) {
-      last.nights.push(day.day);
-    } else {
-      stays.push({ ...day.lodging, nights: [day.day] });
-    }
-  }
-  return stays;
-}
-
-function nightsLabel(nights: number[]): string {
-  if (nights.length === 1) return `Night ${nights[0]}`;
-  return `Nights ${nights[0]}–${nights[nights.length - 1]}`;
-}
+import { collectStays, googleMapsUrl, nightsLabel } from "@/lib/stays";
 
 export function HotelList() {
   const plan = useTrip((s) => s.plan);

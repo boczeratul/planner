@@ -21,6 +21,8 @@ Rules:
 - Respect plausible opening hours and meal times where possible; if the new order makes a
   timing awkward (e.g. dinner at 14:00), keep the order but flag it in notes.
 - Match the traveler's transport and budget preferences.
+- If this day has no overnight stay (e.g. the trip's final day), set lodging to null — never a
+  "checkout" placeholder.
 
 Learning preferences:
 - Compare the previous order with the new one. If the move clearly signals a durable taste

@@ -98,6 +98,7 @@ export function parsePartialPlanResponse(text: string): PartialPlanResponse | nu
     result.plan = {
       destination: typeof p.destination === "string" ? p.destination : undefined,
       durationDays: typeof p.durationDays === "number" ? p.durationDays : undefined,
+      startDate: typeof p.startDate === "string" ? p.startDate : undefined,
       summary: typeof p.summary === "string" ? p.summary : undefined,
       days: sanitizeDays(p.days),
     };
@@ -127,6 +128,7 @@ export function planToPartial(plan: TripPlan): PartialTripPlan {
   return {
     destination: plan.destination,
     durationDays: plan.durationDays,
+    startDate: plan.startDate,
     summary: plan.summary,
     days: plan.days,
   };
@@ -159,6 +161,8 @@ export function mergeRefinedPlan(plan: TripPlan, refine: PlanRefineResponse): Tr
   return {
     destination: refine.destination,
     durationDays: refine.durationDays,
+    // Old persisted plans may predate startDate — never let a refinement blank it
+    startDate: refine.startDate || plan.startDate || "",
     summary: refine.summary,
     days: days.filter((d) => d.day <= refine.durationDays).sort((a, b) => a.day - b.day),
   };

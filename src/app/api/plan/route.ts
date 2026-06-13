@@ -19,12 +19,22 @@ Rules:
 - Group each day's blocks by neighborhood to minimize backtracking.
 - Every day includes breakfast, lunch and dinner blocks plus 2-4 attraction/activity blocks,
   adjusted to the traveler's stated pace.
+- Day 1 starts with an "arrival" block at the trip's entry point, and the final day ends with
+  a "departure" block at the exit point — name the actual place (e.g. "Arrive at OKA airport",
+  "Leave from OKA airport"). Use the destination's real airport/station.
 - Block ids must be unique across the whole trip, formatted "d{day}-b{index}" (e.g. "d2-b3").
+- movable: false for arrival/departure, anything anchored to the lodging ("breakfast near the
+  hotel"), and fixed-time reservations; true for blocks the traveler may freely reorder.
 - legs must connect consecutive blocks in order: leg[i] goes from blocks[i].id to blocks[i+1].id.
 - Transit summaries must be concrete (line names, station names, realistic durations).
 - startTime values must be consistent with durations and transit time between blocks.
 - Lodging should stay in one area unless the trip geography demands a move, and should match
-  the traveler's budget preference.
+  the traveler's budget preference. On the final day (or any day with no overnight stay), set
+  lodging to null — never emit a "checkout" or "no hotel" placeholder as lodging.
+- startDate: if the traveler has said when the trip begins (including relative phrasing like
+  "next Friday" or "over Christmas" — resolve against today's date, provided below), set it as
+  an ISO date (YYYY-MM-DD). If unknown, set startDate to "" and ASK for the start date in your
+  reply.
 
 When refining an existing itinerary:
 - Return ONLY the affected days in changedDays, as complete day objects (all blocks, legs,
@@ -32,6 +42,8 @@ When refining an existing itinerary:
 - Within a changed day, keep the ids and content of blocks the traveler didn't ask to change.
 - If the request changes the trip length or destination, include every day that is new or
   affected, and update durationDays/destination/summary accordingly.
+- startDate: copy from the current itinerary unless the traveler specified or changed it
+  (resolve relative dates against today's date, provided below).
 - If a request is impossible or unwise (e.g. closed that day, geographically absurd), do your
   best and explain the trade-off in the reply.
 - The reply must be short and conversational (1-3 sentences): what changed and why.
@@ -58,6 +70,7 @@ export async function POST(req: Request) {
   }
 
   const sections = [
+    `Today's date: ${new Date().toISOString().slice(0, 10)} (for resolving relative dates).`,
     `Traveler preference profile (from an A/B onboarding quiz):
 ${describePreferences(preferences ?? {}, learned ?? [])}`,
   ];

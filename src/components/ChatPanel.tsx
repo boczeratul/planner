@@ -24,18 +24,36 @@ export function ChatPanel() {
     planning,
     planError,
     messages,
+    chatDraft,
     setPlanning,
     setPlan,
     setPlanError,
     setStreaming,
     setStreamingPlan,
+    setChatDraft,
     addMessage,
   } = useTrip();
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, planning]);
+
+  // Swap-out flow: a block's ⇄ button drops a prefilled request here for the
+  // user to finish ("…Why / what I'd prefer instead: ").
+  useEffect(() => {
+    if (chatDraft === null) return;
+    setText(chatDraft);
+    setChatDraft(null);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    });
+  }, [chatDraft, setChatDraft]);
 
   async function submit() {
     const request = text.trim();
@@ -81,14 +99,23 @@ export function ChatPanel() {
           if (partial) {
             if (partial.reply) setLiveReply(partial.reply);
             if (partial.changedDays.length > 0) {
-              setStreamingPlan(overlayPartialDays(plan, partial.changedDays));
+              const overlaid = overlayPartialDays(plan, partial.changedDays);
+              // the day still being written is the last changed day so far
+              overlaid.activeDay = partial.changedDays[partial.changedDays.length - 1].day;
+              setStreamingPlan(overlaid);
             }
           }
         } else {
           const partial = parsePartialPlanResponse(acc);
           if (partial) {
             if (partial.reply) setLiveReply(partial.reply);
-            if (partial.plan) setStreamingPlan(partial.plan);
+            if (partial.plan) {
+              const days = partial.plan.days;
+              setStreamingPlan({
+                ...partial.plan,
+                activeDay: days.length > 0 ? days[days.length - 1].day : undefined,
+              });
+            }
           }
         }
       }
@@ -191,6 +218,7 @@ export function ChatPanel() {
       <div className="border-t border-zinc-200 bg-white p-3">
         <div className="flex items-end gap-2">
           <textarea
+            ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
