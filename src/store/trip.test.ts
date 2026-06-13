@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useTrip } from "@/store/trip";
+import { tripLabel, useTrip } from "@/store/trip";
 import { block, day, lodging, logisticsUpdate, plan } from "@/test/fixtures";
 
 const reset = () =>
@@ -107,5 +107,66 @@ describe("trip store", () => {
     const st = useTrip.getState();
     expect(st.plan).toBeNull();
     expect(st.messages).toEqual([]);
+  });
+});
+
+// Spec (request): users keep multiple trips in localStorage and switch between
+// them; the active trip's plan/messages mirror is what every component reads.
+describe("multi-trip", () => {
+  beforeEach(() => useTrip.setState({ trips: [], activeTripId: null, plan: null, messages: [] }));
+
+  it("createTrip adds an empty trip and makes it active", () => {
+    useTrip.getState().createTrip();
+    const a = useTrip.getState();
+    expect(a.trips).toHaveLength(1);
+    expect(a.activeTripId).toBe(a.trips[0].id);
+    expect(a.plan).toBeNull();
+
+    useTrip.getState().createTrip();
+    const b = useTrip.getState();
+    expect(b.trips).toHaveLength(2);
+    expect(b.activeTripId).toBe(b.trips[1].id); // newest is active
+  });
+
+  it("switchTrip preserves each trip's plan independently", () => {
+    const s = useTrip.getState();
+    s.createTrip();
+    s.setPlan(plan({ destination: "Kyoto" }));
+    const kyotoId = useTrip.getState().activeTripId!;
+
+    s.createTrip();
+    s.setPlan(plan({ destination: "Lisbon" }));
+    const lisbonId = useTrip.getState().activeTripId!;
+
+    s.switchTrip(kyotoId);
+    expect(useTrip.getState().plan!.destination).toBe("Kyoto");
+
+    s.switchTrip(lisbonId);
+    expect(useTrip.getState().plan!.destination).toBe("Lisbon");
+  });
+
+  it("deleteTrip falls back to another trip and never reaches zero", () => {
+    const s = useTrip.getState();
+    s.createTrip();
+    const first = useTrip.getState().activeTripId!;
+    s.createTrip();
+    const second = useTrip.getState().activeTripId!;
+
+    s.deleteTrip(second); // delete the active one
+    const a = useTrip.getState();
+    expect(a.trips.map((t) => t.id)).toEqual([first]);
+    expect(a.activeTripId).toBe(first);
+
+    s.deleteTrip(first); // deleting the last trip seeds a fresh one
+    const b = useTrip.getState();
+    expect(b.trips).toHaveLength(1);
+    expect(b.activeTripId).toBe(b.trips[0].id);
+    expect(b.plan).toBeNull();
+  });
+
+  it("tripLabel prefers the title, then the destination, then a default", () => {
+    expect(tripLabel({ title: "Honeymoon", plan: plan({ destination: "Bali" }) })).toBe("Honeymoon");
+    expect(tripLabel({ title: "  ", plan: plan({ destination: "Bali" }) })).toBe("Bali");
+    expect(tripLabel({ title: "", plan: null })).toBe("New trip");
   });
 });
