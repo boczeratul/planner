@@ -22,6 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
 import { dateForDay } from "@/lib/dates";
+import { isLocked } from "@/lib/blocks";
 import type {
   DayPlan,
   LogisticsLeg,
@@ -85,12 +86,7 @@ export function BlockInner({
   );
 }
 
-/** Blocks that must keep their place: arrival/departure, and anything the
- *  planner marked as anchored (movable === false). Legacy blocks without the
- *  flag stay draggable. */
-export function isLocked(block: ScheduleBlock): boolean {
-  return block.type === "arrival" || block.type === "departure" || block.movable === false;
-}
+export { isLocked };
 
 function SortableBlock({
   block,
