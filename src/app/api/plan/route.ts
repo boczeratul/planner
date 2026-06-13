@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { getAuthUserId } from "@/lib/requireUser";
 import { anthropic, PLANNER_MODEL } from "@/lib/anthropic";
 import { describePreferences } from "@/lib/preferences";
 import {
@@ -57,6 +58,9 @@ Learning preferences:
   reveal nothing durable — an empty list is the normal case.`;
 
 export async function POST(req: Request) {
+  if (!(await getAuthUserId())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { request, preferences, learned, currentPlan, history } = (await req.json()) as {
     request: string;
     preferences: PreferenceAnswers;

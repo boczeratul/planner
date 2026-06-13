@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthUserId } from "@/lib/requireUser";
 import { dateForDay } from "@/lib/dates";
 import { collectStays, googleMapsUrl, nightsLabel } from "@/lib/stays";
 import type { LogisticsLeg, ScheduleBlock, TripPlan } from "@/lib/types";
@@ -147,6 +148,9 @@ async function notion(path: string, init: RequestInit & { body?: string }) {
 }
 
 export async function POST(req: Request) {
+  if (!(await getAuthUserId())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { plan } = (await req.json()) as { plan: TripPlan };
   if (!plan?.destination || !Array.isArray(plan.days)) {
     return NextResponse.json({ error: "Missing plan" }, { status: 400 });
