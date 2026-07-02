@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { AttractionPicker } from "@/components/AttractionPicker";
 import { ChatPanel } from "@/components/ChatPanel";
-import { HotelList } from "@/components/HotelList";
+import { RightPanel } from "@/components/RightPanel";
 
 // Client-only: verifies hotels on Google Maps after each plan change
 const HotelReconciler = dynamic(() => import("@/components/HotelReconciler"), { ssr: false });
@@ -20,6 +21,7 @@ export default function Home() {
   const onboardingComplete = usePreferences((s) => s.onboardingComplete);
   const plan = useTrip((s) => s.plan);
   const streaming = useTrip((s) => s.streaming);
+  const hasProposal = useTrip((s) => s.attractions.length > 0);
   const activeTripId = useTrip((s) => s.activeTripId);
 
   // Wait for the local cache AND the server reconcile so a fresh device
@@ -50,19 +52,22 @@ export default function Home() {
       <section className="flex-1 overflow-y-auto">
         {plan || streaming ? (
           <ScheduleBoard />
+        ) : hasProposal ? (
+          <AttractionPicker />
         ) : (
           <div className="flex h-full items-center justify-center px-8 text-center">
             <div>
               <p className="text-4xl">🗺️</p>
               <p className="mt-4 text-lg font-medium text-zinc-700">Your itinerary will appear here</p>
               <p className="mt-1 text-sm text-zinc-400">
-                Tell the planner where you want to go in the panel on the left.
+                Tell the planner where you want to go in the panel on the left. You&apos;ll get a
+                list of attractions to vote on first, then the itinerary.
               </p>
             </div>
           </div>
         )}
       </section>
-      {plan && !streaming && <HotelList />}
+      {plan && !streaming && <RightPanel />}
       <HotelReconciler />
     </main>
   );

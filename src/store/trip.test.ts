@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { tripLabel, useTrip } from "@/store/trip";
-import { block, day, lodging, logisticsUpdate, plan } from "@/test/fixtures";
+import { attraction, block, day, lodging, logisticsUpdate, plan } from "@/test/fixtures";
 
 const reset = () =>
   useTrip.setState({
@@ -168,5 +168,55 @@ describe("multi-trip", () => {
     expect(tripLabel({ title: "Honeymoon", plan: plan({ destination: "Bali" }) })).toBe("Honeymoon");
     expect(tripLabel({ title: "  ", plan: plan({ destination: "Bali" }) })).toBe("Bali");
     expect(tripLabel({ title: "", plan: null })).toBe("New trip");
+  });
+});
+
+// Spec (request): two-step planning — a per-trip attraction proposal the user
+// votes on (tri-state: up = must include, down = must skip, missing = neutral)
+// before the itinerary is built.
+describe("attraction proposal", () => {
+  beforeEach(() => useTrip.setState({ trips: [], activeTripId: null, plan: null, messages: [] }));
+
+  it("setProposal stores the list + votes and mirrors them into the trip", () => {
+    const s = useTrip.getState();
+    s.createTrip();
+    s.setProposal([attraction({ id: "a1" }), attraction({ id: "a2" })], { a1: "up", a2: "down" });
+
+    const st = useTrip.getState();
+    expect(st.attractions.map((a) => a.id)).toEqual(["a1", "a2"]);
+    const saved = st.trips.find((t) => t.id === st.activeTripId)!;
+    expect(saved.attractions.map((a) => a.id)).toEqual(["a1", "a2"]);
+    expect(saved.attractionVotes).toEqual({ a1: "up", a2: "down" });
+  });
+
+  it("setAttractionVote records up/down and clears back to neutral", () => {
+    const s = useTrip.getState();
+    s.createTrip();
+    s.setProposal([attraction({ id: "a1" })], {});
+
+    s.setAttractionVote("a1", "up");
+    expect(useTrip.getState().attractionVotes).toEqual({ a1: "up" });
+    s.setAttractionVote("a1", "down");
+    expect(useTrip.getState().attractionVotes).toEqual({ a1: "down" });
+    s.setAttractionVote("a1", "neutral"); // neutral = removed from the record
+    expect(useTrip.getState().attractionVotes).toEqual({});
+  });
+
+  it("proposal survives switching trips, and reset clears it", () => {
+    const s = useTrip.getState();
+    s.createTrip();
+    s.setProposal([attraction({ id: "a1" })], { a1: "up" });
+    const firstId = useTrip.getState().activeTripId!;
+
+    s.createTrip();
+    expect(useTrip.getState().attractions).toEqual([]); // fresh trip: no proposal
+
+    s.switchTrip(firstId);
+    expect(useTrip.getState().attractions.map((a) => a.id)).toEqual(["a1"]);
+    expect(useTrip.getState().attractionVotes).toEqual({ a1: "up" });
+
+    s.reset();
+    expect(useTrip.getState().attractions).toEqual([]);
+    expect(useTrip.getState().attractionVotes).toEqual({});
   });
 });

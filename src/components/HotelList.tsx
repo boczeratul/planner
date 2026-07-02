@@ -3,6 +3,7 @@
 import { useTrip } from "@/store/trip";
 import { collectStays, googleMapsUrl, nightsLabel } from "@/lib/stays";
 
+/** Hotels tab content (rendered inside RightPanel's scrollable body). */
 export function HotelList() {
   const plan = useTrip((s) => s.plan);
   if (!plan) return null;
@@ -10,8 +11,7 @@ export function HotelList() {
   const stays = collectStays(plan);
 
   return (
-    <aside className="hidden w-72 shrink-0 overflow-y-auto border-l border-zinc-200 bg-zinc-50 p-4 lg:block">
-      <h3 className="mb-1 font-bold text-zinc-900">Hotels</h3>
+    <div>
       <p className="mb-4 text-xs text-zinc-400">Click a stay to view it on Google Maps ↗</p>
 
       <div className="space-y-3">
@@ -33,6 +33,6 @@ export function HotelList() {
           </a>
         ))}
       </div>
-    </aside>
+    </div>
   );
 }

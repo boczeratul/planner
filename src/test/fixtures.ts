@@ -1,5 +1,6 @@
 // Schema-accurate builders for tests. Defaults are valid; pass overrides to vary.
 import type {
+  Attraction,
   DayPlan,
   Lodging,
   LogisticsLeg,
@@ -8,6 +9,31 @@ import type {
   ScheduleBlock,
   TripPlan,
 } from "@/lib/types";
+import type { Trip } from "@/store/trip";
+
+export function attraction(over: Partial<Attraction> = {}): Attraction {
+  return {
+    id: "a1",
+    name: "Fushimi Inari Shrine",
+    description: "Thousands of vermilion torii gates.",
+    location: "Fushimi",
+    category: "temple",
+    ...over,
+  };
+}
+
+export function trip(over: Partial<Trip> = {}): Trip {
+  return {
+    id: "t1",
+    title: "",
+    createdAt: 0,
+    plan: null,
+    messages: [],
+    attractions: [],
+    attractionVotes: {},
+    ...over,
+  };
+}
 
 export function block(over: Partial<ScheduleBlock> = {}): ScheduleBlock {
   return {

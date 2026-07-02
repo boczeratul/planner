@@ -61,13 +61,28 @@ export async function POST(req: Request) {
   if (!(await getAuthUserId())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { request, preferences, learned, currentPlan, history } = (await req.json()) as {
-    request: string;
-    preferences: PreferenceAnswers;
-    learned?: string[];
-    currentPlan?: TripPlan | null;
-    history?: ChatMessage[];
-  };
+  const {
+    request,
+    preferences,
+    learned,
+    currentPlan,
+    history,
+    mustIncludeAttractions,
+    mustSkipAttractions,
+    flexibleAttractions,
+  } = (await req.json()) as {
+      request: string;
+      preferences: PreferenceAnswers;
+      learned?: string[];
+      currentPlan?: TripPlan | null;
+      history?: ChatMessage[];
+      /** initial mode: upvoted — hard requirement, every one appears */
+      mustIncludeAttractions?: { name: string; location: string }[];
+      /** initial mode: downvoted — must not appear */
+      mustSkipAttractions?: string[];
+      /** initial mode: neutral — include or skip at the planner's discretion */
+      flexibleAttractions?: { name: string; location: string }[];
+    };
 
   if (!request?.trim()) {
     return NextResponse.json({ error: "Missing trip request" }, { status: 400 });
@@ -82,6 +97,30 @@ ${describePreferences(preferences ?? {}, learned ?? [])}`,
   if (currentPlan) {
     sections.push(`Current itinerary (JSON):
 ${JSON.stringify(currentPlan)}`);
+  }
+  const voted =
+    (mustIncludeAttractions?.length ?? 0) +
+    (mustSkipAttractions?.length ?? 0) +
+    (flexibleAttractions?.length ?? 0);
+  if (!currentPlan && voted > 0) {
+    const parts = ["The traveler voted on a list of suggested attractions:"];
+    if (mustIncludeAttractions && mustIncludeAttractions.length > 0) {
+      parts.push(`MUST include (hard requirement — every one of these appears in the itinerary):
+${mustIncludeAttractions.map((a) => `- ${a.name} (${a.location})`).join("\n")}`);
+    }
+    if (mustSkipAttractions && mustSkipAttractions.length > 0) {
+      parts.push(`MUST NOT include under any circumstances:
+${mustSkipAttractions.map((n) => `- ${n}`).join("\n")}`);
+    }
+    if (flexibleAttractions && flexibleAttractions.length > 0) {
+      parts.push(`Flexible — your choice; include the ones that fit the days and geography well,
+skip the rest freely:
+${flexibleAttractions.map((a) => `- ${a.name} (${a.location})`).join("\n")}`);
+    }
+    parts.push(
+      "You may also add fitting attractions that are not on this list, except the MUST NOT ones.",
+    );
+    sections.push(parts.join("\n\n"));
   }
   if (history && history.length > 0) {
     const transcript = history

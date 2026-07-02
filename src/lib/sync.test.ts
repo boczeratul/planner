@@ -3,7 +3,7 @@ import { buildSyncPayload, decideSync, EMPTY_SYNC } from "@/lib/syncTypes";
 import { applySyncPayload, clearLocalData, currentSyncPayload } from "@/lib/sync";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
-import { plan } from "@/test/fixtures";
+import { plan, trip } from "@/test/fixtures";
 import type { SyncPayload } from "@/lib/syncTypes";
 
 // Spec (cross-device auth): the server is the source of truth; on sign-in the
@@ -55,16 +55,10 @@ describe("applySyncPayload / currentSyncPayload round-trip", () => {
   });
 
   it("applies a server payload into both stores and loads the active trip", () => {
-    const trip = {
-      id: "t-kyoto",
-      title: "Kyoto",
-      createdAt: 0,
-      plan: plan({ destination: "Kyoto" }),
-      messages: [],
-    };
+    const kyoto = trip({ id: "t-kyoto", title: "Kyoto", plan: plan({ destination: "Kyoto" }) });
     const payload: SyncPayload = {
       preferences: { answers: { food: "street" }, microPreferences: [], onboardingComplete: true },
-      trips: [trip],
+      trips: [kyoto],
       activeTripId: "t-kyoto",
     };
 
@@ -81,7 +75,7 @@ describe("applySyncPayload / currentSyncPayload round-trip", () => {
   it("currentSyncPayload reflects what applySyncPayload set", () => {
     const payload: SyncPayload = {
       preferences: { answers: { pace: "packed" }, microPreferences: [], onboardingComplete: true },
-      trips: [{ id: "t1", title: "", createdAt: 0, plan: null, messages: [] }],
+      trips: [trip({ id: "t1" })],
       activeTripId: "t1",
     };
     applySyncPayload(payload);
@@ -94,7 +88,7 @@ describe("applySyncPayload / currentSyncPayload round-trip", () => {
   it("clearLocalData empties prefs and seeds a single fresh trip", () => {
     applySyncPayload({
       preferences: { answers: { x: "y" }, microPreferences: [], onboardingComplete: true },
-      trips: [{ id: "t1", title: "Old", createdAt: 0, plan: plan(), messages: [] }],
+      trips: [trip({ id: "t1", title: "Old", plan: plan() })],
       activeTripId: "t1",
     });
 

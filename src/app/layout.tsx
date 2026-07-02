@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ClerkProvider, UserButton } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { SyncProvider } from "@/components/SyncProvider";
 import "./globals.css";
 
@@ -31,11 +31,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       >
         <body className="min-h-full flex flex-col">
-          {/* Account menu / sign-out. UserButton renders nothing when signed
-              out; after sign-out, middleware redirects to /sign-in. */}
-          <div className="fixed right-3 top-2 z-50">
-            <UserButton />
-          </div>
+          {/* Account menu (UserButton) lives in the ChatPanel header and the
+              /execute header, not globally here. */}
           <SyncProvider>{children}</SyncProvider>
         </body>
       </html>

@@ -2,7 +2,14 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { ChatMessage, LogisticsUpdate, PartialTripPlan, TripPlan } from "@/lib/types";
+import type {
+  Attraction,
+  AttractionVote,
+  ChatMessage,
+  LogisticsUpdate,
+  PartialTripPlan,
+  TripPlan,
+} from "@/lib/types";
 
 /** One saved trip: its itinerary + the conversation that produced it. */
 export interface Trip {
@@ -12,6 +19,10 @@ export interface Trip {
   createdAt: number;
   plan: TripPlan | null;
   messages: ChatMessage[];
+  /** Step-1 recommendation list the traveler voted on (empty until proposed). */
+  attractions: Attraction[];
+  /** Tri-state votes: id -> "up" (must include) | "down" (must skip); missing = neutral. */
+  attractionVotes: Record<string, AttractionVote>;
 }
 
 /** Label shown for a trip in the switcher. */
@@ -25,7 +36,15 @@ function makeId(): string {
 }
 
 function newTrip(): Trip {
-  return { id: makeId(), title: "", createdAt: Date.now(), plan: null, messages: [] };
+  return {
+    id: makeId(),
+    title: "",
+    createdAt: Date.now(),
+    plan: null,
+    messages: [],
+    attractions: [],
+    attractionVotes: {},
+  };
 }
 
 interface TripState {
@@ -41,10 +60,14 @@ interface TripState {
    */
   plan: TripPlan | null;
   messages: ChatMessage[];
+  attractions: Attraction[];
+  attractionVotes: Record<string, AttractionVote>;
 
   // ----- transient per-active-trip state (never persisted) -----
   planning: boolean;
   planError: string | null;
+  /** streamed assistant reply shown live in the chat bubble */
+  liveReply: string;
   /** true while /api/plan is streaming; the board renders read-only */
   streaming: boolean;
   /** progressively-parsed plan shown while streaming */
@@ -70,6 +93,11 @@ interface TripState {
   setPlanning: (v: boolean) => void;
   setPlan: (plan: TripPlan | null) => void;
   setPlanError: (e: string | null) => void;
+  setLiveReply: (v: string) => void;
+  /** Store a new/refined attraction proposal + the traveler's votes. */
+  setProposal: (attractions: Attraction[], votes: Record<string, AttractionVote>) => void;
+  /** Record one tri-state vote ("neutral" clears the entry). */
+  setAttractionVote: (id: string, vote: AttractionVote) => void;
   setStreaming: (v: boolean) => void;
   setStreamingPlan: (p: PartialTripPlan | null) => void;
   /** Set/replace day 1's date (ISO YYYY-MM-DD); persists with the plan. */
@@ -95,6 +123,7 @@ interface TripState {
 const FRESH_TRANSIENT = {
   planning: false,
   planError: null,
+  liveReply: "",
   streaming: false,
   streamingPlan: null,
   chatDraft: null,
@@ -109,9 +138,12 @@ export const useTrip = create<TripState>()(
       plan: null,
       planning: false,
       planError: null,
+      liveReply: "",
       streaming: false,
       streamingPlan: null,
       messages: [],
+      attractions: [],
+      attractionVotes: {},
       chatDraft: null,
       recomputingDays: [],
       hasHydrated: false,
@@ -123,6 +155,8 @@ export const useTrip = create<TripState>()(
           activeTripId: t.id,
           plan: null,
           messages: [],
+          attractions: [],
+          attractionVotes: {},
           ...FRESH_TRANSIENT,
         }));
       },
@@ -134,6 +168,8 @@ export const useTrip = create<TripState>()(
             activeTripId: id,
             plan: t.plan,
             messages: t.messages,
+            attractions: t.attractions ?? [],
+            attractionVotes: t.attractionVotes ?? {},
             ...FRESH_TRANSIENT,
           };
         }),
@@ -150,6 +186,8 @@ export const useTrip = create<TripState>()(
             activeTripId: fallback.id,
             plan: fallback.plan,
             messages: fallback.messages,
+            attractions: fallback.attractions ?? [],
+            attractionVotes: fallback.attractionVotes ?? {},
             ...FRESH_TRANSIENT,
           };
         }),
@@ -159,13 +197,21 @@ export const useTrip = create<TripState>()(
         })),
       hydrateFromTrips: () =>
         set((s) => {
-          const trips = s.trips.length > 0 ? s.trips : [newTrip()];
+          const seeded = s.trips.length > 0 ? s.trips : [newTrip()];
+          // Normalize trips saved before attraction voting existed.
+          const trips = seeded.map((t) => ({
+            ...t,
+            attractions: t.attractions ?? [],
+            attractionVotes: t.attractionVotes ?? {},
+          }));
           const active = trips.find((t) => t.id === s.activeTripId) ?? trips[0];
           return {
             trips,
             activeTripId: active.id,
             plan: active.plan,
             messages: active.messages,
+            attractions: active.attractions,
+            attractionVotes: active.attractionVotes,
             hasHydrated: true,
           };
         }),
@@ -173,6 +219,15 @@ export const useTrip = create<TripState>()(
       setPlanning: (v) => set({ planning: v }),
       setPlan: (plan) => set({ plan, planError: null }),
       setPlanError: (e) => set({ planError: e }),
+      setLiveReply: (liveReply) => set({ liveReply }),
+      setProposal: (attractions, attractionVotes) => set({ attractions, attractionVotes }),
+      setAttractionVote: (id, vote) =>
+        set((s) => {
+          const next = { ...s.attractionVotes };
+          if (vote === "neutral") delete next[id];
+          else next[id] = vote;
+          return { attractionVotes: next };
+        }),
       setStreaming: (v) => set({ streaming: v }),
       setStreamingPlan: (p) => set({ streamingPlan: p }),
       setStartDate: (startDate) =>
@@ -197,11 +252,9 @@ export const useTrip = create<TripState>()(
         set({
           plan: null,
           messages: [],
-          planError: null,
-          planning: false,
-          streaming: false,
-          streamingPlan: null,
-          recomputingDays: [],
+          attractions: [],
+          attractionVotes: {},
+          ...FRESH_TRANSIENT,
         }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
       reorderDay: (day, blockIds) =>
@@ -263,6 +316,8 @@ export const useTrip = create<TripState>()(
             createdAt: Date.now(),
             plan: old.plan ?? null,
             messages: old.messages ?? [],
+            attractions: [],
+            attractionVotes: {},
           };
           return { trips: [t], activeTripId: t.id };
         }
@@ -281,14 +336,33 @@ export const useTrip = create<TripState>()(
 // firing on purely transient changes (planning/streaming flags).
 let lastPlan = useTrip.getState().plan;
 let lastMessages = useTrip.getState().messages;
+let lastAttractions = useTrip.getState().attractions;
+let lastVotes = useTrip.getState().attractionVotes;
 useTrip.subscribe((s) => {
-  if (s.plan === lastPlan && s.messages === lastMessages) return;
+  if (
+    s.plan === lastPlan &&
+    s.messages === lastMessages &&
+    s.attractions === lastAttractions &&
+    s.attractionVotes === lastVotes
+  ) {
+    return;
+  }
   lastPlan = s.plan;
   lastMessages = s.messages;
+  lastAttractions = s.attractions;
+  lastVotes = s.attractionVotes;
   if (!s.activeTripId) return;
   useTrip.setState((st) => ({
     trips: st.trips.map((t) =>
-      t.id === st.activeTripId ? { ...t, plan: st.plan, messages: st.messages } : t,
+      t.id === st.activeTripId
+        ? {
+            ...t,
+            plan: st.plan,
+            messages: st.messages,
+            attractions: st.attractions,
+            attractionVotes: st.attractionVotes,
+          }
+        : t,
     ),
   }));
 });
