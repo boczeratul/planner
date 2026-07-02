@@ -3,36 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { usePreferences } from "@/store/preferences";
 import { useTrip } from "@/store/trip";
-import {
-  mergeRefinedPlan,
-  overlayPartialDays,
-  parsePartialPlanResponse,
-  parsePartialRefineResponse,
-  planToPartial,
-} from "@/lib/streaming";
-import { PlanRefineResponseSchema, PlanResponseSchema } from "@/lib/types";
+import { sendChatMessage } from "@/lib/planActions";
 
 export function ChatPanel() {
   const [text, setText] = useState("");
-  const [liveReply, setLiveReply] = useState("");
-  const answers = usePreferences((s) => s.answers);
-  const microPreferences = usePreferences((s) => s.microPreferences);
-  const addMicroPreferences = usePreferences((s) => s.addMicroPreferences);
   const resetOnboarding = usePreferences((s) => s.resetOnboarding);
-  const {
-    plan,
-    planning,
-    planError,
-    messages,
-    chatDraft,
-    setPlanning,
-    setPlan,
-    setPlanError,
-    setStreaming,
-    setStreamingPlan,
-    setChatDraft,
-    addMessage,
-  } = useTrip();
+  const plan = useTrip((s) => s.plan);
+  const attractions = useTrip((s) => s.attractions);
+  const planning = useTrip((s) => s.planning);
+  const planError = useTrip((s) => s.planError);
+  const liveReply = useTrip((s) => s.liveReply);
+  const messages = useTrip((s) => s.messages);
+  const chatDraft = useTrip((s) => s.chatDraft);
+  const setChatDraft = useTrip((s) => s.setChatDraft);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -55,98 +38,24 @@ export function ChatPanel() {
     });
   }, [chatDraft, setChatDraft]);
 
-  async function submit() {
+  function submit() {
     const request = text.trim();
     if (!request || planning) return;
     setText("");
-    addMessage({ role: "user", text: request });
-    setPlanning(true);
-    setPlanError(null);
-    try {
-      const res = await fetch("/api/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          request,
-          preferences: answers,
-          learned: microPreferences.map((m) => m.text),
-          currentPlan: plan,
-          history: messages.filter((m) => m.role !== "note"),
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `Planning failed (${res.status})`);
-      }
-      if (!res.body) throw new Error("No response stream");
-
-      // The body is the structured-output JSON document, streamed as it is
-      // generated. Re-parse the accumulated fragment on each chunk so the
-      // board fills in block by block. Refinements stream only the changed
-      // days, overlaid live onto the existing plan.
-      const refining = plan !== null;
-      setStreaming(true);
-      setStreamingPlan(refining ? planToPartial(plan) : null);
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let acc = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        acc += decoder.decode(value, { stream: true });
-        if (refining) {
-          const partial = parsePartialRefineResponse(acc);
-          if (partial) {
-            if (partial.reply) setLiveReply(partial.reply);
-            if (partial.changedDays.length > 0) {
-              const overlaid = overlayPartialDays(plan, partial.changedDays);
-              // the day still being written is the last changed day so far
-              overlaid.activeDay = partial.changedDays[partial.changedDays.length - 1].day;
-              setStreamingPlan(overlaid);
-            }
-          }
-        } else {
-          const partial = parsePartialPlanResponse(acc);
-          if (partial) {
-            if (partial.reply) setLiveReply(partial.reply);
-            if (partial.plan) {
-              const days = partial.plan.days;
-              setStreamingPlan({
-                ...partial.plan,
-                activeDay: days.length > 0 ? days[days.length - 1].day : undefined,
-              });
-            }
-          }
-        }
-      }
-      acc += decoder.decode();
-
-      let reply: string;
-      let learnedPreferences: string[];
-      if (refining) {
-        const refine = PlanRefineResponseSchema.parse(JSON.parse(acc));
-        setPlan(mergeRefinedPlan(plan, refine));
-        reply = refine.reply;
-        learnedPreferences = refine.learnedPreferences;
-      } else {
-        const full = PlanResponseSchema.parse(JSON.parse(acc));
-        setPlan(full.plan);
-        reply = full.reply;
-        learnedPreferences = full.learnedPreferences;
-      }
-      addMessage({ role: "assistant", text: reply });
-      for (const t of addMicroPreferences(learnedPreferences ?? [], "chat")) {
-        addMessage({ role: "note", text: `📌 Noted: ${t}` });
-      }
-    } catch (err) {
-      setPlanError(err instanceof Error ? err.message : "Planning failed");
-    } finally {
-      setPlanning(false);
-      setStreaming(false);
-      setStreamingPlan(null);
-      setLiveReply("");
-    }
+    void sendChatMessage(request);
   }
+
+  const proposalStage = !plan && attractions.length > 0;
+  const busyText = plan
+    ? "Reworking the plan…"
+    : proposalStage
+      ? "Updating the suggestions…"
+      : "Curating attraction ideas for your trip…";
+  const placeholder = plan
+    ? "Refine the plan…"
+    : proposalStage
+      ? "Adjust the suggestions… (or pick & build on the right)"
+      : "Describe your trip…";
 
   return (
     <aside className="flex w-full min-h-0 flex-1 flex-col bg-zinc-50">
@@ -172,8 +81,8 @@ export function ChatPanel() {
               </span>
             </p>
             <p className="mt-2 text-xs text-zinc-400">
-              Once the plan appears, keep chatting here to refine it — &ldquo;make day 2 more
-              relaxed&rdquo;, &ldquo;swap the museum for a hike&rdquo;…
+              You&apos;ll first get a list of suggested attractions to vote on; the itinerary is
+              built from your picks. Keep chatting anytime to refine either.
             </p>
           </div>
         )}
@@ -203,8 +112,7 @@ export function ChatPanel() {
               liveReply ? "whitespace-pre-wrap text-zinc-800" : "animate-pulse text-indigo-600"
             }`}
           >
-            {liveReply ||
-              (plan ? "Reworking the plan…" : "Designing your itinerary — this can take a minute…")}
+            {liveReply || busyText}
           </div>
         )}
         {planError && (
@@ -228,7 +136,7 @@ export function ChatPanel() {
               }
             }}
             rows={2}
-            placeholder={plan ? "Refine the plan…" : "Describe your trip…"}
+            placeholder={placeholder}
             className="flex-1 resize-none rounded-xl border-2 border-zinc-200 bg-white p-3 text-sm text-zinc-900 outline-none transition focus:border-indigo-400"
           />
           <button

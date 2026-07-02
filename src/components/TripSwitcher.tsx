@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { UserButton } from "@clerk/nextjs";
 import { tripLabel, useTrip } from "@/store/trip";
 
 export function TripSwitcher() {
@@ -26,7 +27,9 @@ export function TripSwitcher() {
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-zinc-200 bg-zinc-100 px-2 py-2">
+    <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200 bg-zinc-100 px-2 py-2">
+      {/* Trip tabs scroll; the account button stays pinned on the right. */}
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
       {trips.map((t) => {
         const active = t.id === activeTripId;
         const editing = t.id === editingId;
@@ -88,6 +91,11 @@ export function TripSwitcher() {
       >
         +
       </button>
+      </div>
+      {/* Account menu / sign-out; renders nothing while signed out. */}
+      <div className="shrink-0">
+        <UserButton />
+      </div>
     </div>
   );
 }

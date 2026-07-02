@@ -21,6 +21,40 @@ export interface MicroPreference {
   learnedAt: number;
 }
 
+// ---------- Attraction proposal (step 1 of planning) ----------
+
+export const AttractionSchema = z.object({
+  id: z.string().describe("Stable unique id, e.g. 'a1'"),
+  name: z.string(),
+  description: z.string().describe("1-2 sentences on what it is and why it fits this traveler"),
+  location: z.string().describe("Neighborhood or area name"),
+  category: z
+    .string()
+    .describe("One short lowercase tag, e.g. 'temple', 'food', 'market', 'nature', 'day trip'"),
+});
+
+// Envelope returned by /api/attractions: a conversational reply plus the
+// recommendation list the traveler votes on before the itinerary is built.
+export const AttractionProposalSchema = z.object({
+  reply: z
+    .string()
+    .describe("1-2 conversational sentences asking the traveler to tick what interests them"),
+  destination: z.string(),
+  attractions: z.array(AttractionSchema).describe("12-18 diverse recommendations"),
+});
+
+export type Attraction = z.infer<typeof AttractionSchema>;
+export type AttractionProposal = z.infer<typeof AttractionProposalSchema>;
+
+/**
+ * Tri-state vote on a proposed attraction:
+ * - "up"      -> must include
+ * - "down"    -> must skip
+ * - "neutral" -> can include, can skip (the planner decides)
+ * Vote records are sparse: a missing entry means neutral.
+ */
+export type AttractionVote = "up" | "down" | "neutral";
+
 // ---------- Itinerary ----------
 
 export const ScheduleBlockSchema = z.object({

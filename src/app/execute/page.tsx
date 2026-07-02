@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 import { BlockInner, TransitLeg } from "@/components/ScheduleBoard";
 import type { QueryStop } from "@/components/DayMap";
 import { dateForDay } from "@/lib/dates";
@@ -105,6 +106,8 @@ export default function ExecutePage() {
             </button>
           ))}
         </nav>
+        {/* Account menu / sign-out (no chat column on this page). */}
+        <UserButton />
       </header>
 
       <div className="flex flex-1 overflow-hidden">
